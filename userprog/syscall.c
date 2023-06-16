@@ -16,26 +16,11 @@
 #include "filesys/file.h"
 #include "userprog/process.h"
 #include <string.h>
+#include "vm/vm.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
-void check_address(void *addr);
-void get_argument(void *rsp, int *arg, int count);
-void halt(void);
-void exit(int status);
-pid_t fork(const char *thread_name);
-int exec(const char *cmd_line);
-int wait(pid_t pid);
-bool create(const char *file, unsigned initial_size);
-bool remove(const char *file);
-int open(const char *file);
-int filesize(int fd);
-int read(int fd, void *buffer, unsigned size);
-int write(int fd, const void *buffer, unsigned size);
-void seek(int fd, unsigned position);
-unsigned tell(int fd);
-void close(int fd);
-void check_address(void *addr);
+struct page *check_address(void *addr);
 int process_add_file(struct file *f);
 struct file *process_get_file(int fd);
 
@@ -242,7 +227,7 @@ buffer 안에 fd 로 열려있는 파일로부터 size 바이트를 읽습니다
 */
 int read(int fd, void *buffer, unsigned size)
 {
-   check_address(buffer);
+   check_valid_buffer(buffer, size, 0);
    int file_size;
    char *read_buffer = buffer;
    if (fd == 0)
@@ -282,6 +267,7 @@ buffer로부터 open file fd로 size 바이트를 적어줍니다.
 */
 int write(int fd, const void *buffer, unsigned size)
 {
+   check_valid_buffer(buffer, size, 1);
    int file_size;
    if (fd == STDOUT_FILENO)
    {
@@ -347,11 +333,35 @@ void close(int fd)
 주소 값이 유저 영역 주소 값인지 확인
 유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)
 */
-void check_address(void *addr)
+struct page *check_address(void *addr)
 {
    struct thread *curr = thread_current();
+#ifdef VM
    if (!is_user_vaddr(addr) || is_kernel_vaddr(addr) || pml4_get_page(curr->pml4, addr) == NULL)
    {
       exit(-1);
+   }
+   return spt_find_page(&thread_current()->spt, addr);
+#else
+   if (!is_user_vaddr(addr) || is_kernel_vaddr(addr) || pml4_get_page(curr->pml4, addr) == NULL)
+   {
+      exit(-1);
+   }
+#endif
+}
+
+void check_valid_buffer(void *buffer, unsigned size, bool to_write)
+{
+   for (char i = 0; i <= size; i++)
+   {
+      struct page *page = check_address(buffer + i);
+      if (page == NULL)
+      {
+         exit(-1);
+      }
+      if (to_write == true && page->writable == false)
+      {
+         exit(-1);
+      }
    }
 }
