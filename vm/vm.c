@@ -60,9 +60,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *p = malloc(sizeof(struct page));
+		struct page *p = (struct page*) malloc(sizeof(struct page));
 		if(p == NULL){
-			free(p);
 			return false;
 		}
 		switch (type)
@@ -76,6 +75,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		default:
 			break;
 		}
+		p->writable = writable;
 		/* TODO: Insert the page into the spt. */
 		return spt_insert_page(spt, p);
 	}
@@ -101,9 +101,9 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
-	int succ = false;
+	bool succ = false;
 	/* TODO: Fill this function. */
-	if(hash_insert(&spt->vm, &page->h_elem) != NULL){
+	if(hash_insert(&spt->vm, &page->h_elem) == NULL){
 		succ = true;
 	}
 	return succ;
@@ -142,8 +142,10 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	frame = palloc_get_page(PAL_USER | PAL_ZERO);
-	if(frame == NULL){
+	frame = malloc(sizeof(struct frame));
+	frame->kva = palloc_get_page(PAL_USER);
+	if(frame->kva == NULL){
+		frame->page = NULL;
 		PANIC("todo");
 	}	
 	frame->page = NULL;
@@ -171,7 +173,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-
 	return vm_do_claim_page (page);
 }
 
@@ -205,7 +206,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	if(spt_insert_page(&thread_current()->spt, page)){
+	if(install_page(page->va,frame->kva, page->writable)){
 		return swap_in (page, frame->kva);
 	}
 	return false;

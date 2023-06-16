@@ -739,6 +739,7 @@ setup_stack(struct intr_frame *if_)
    return success;
 }
 
+#else
 /* Adds a mapping from user virtual address UPAGE to kernel
  * virtual address KPAGE to the page table.
  * If WRITABLE is true, the user process may modify the page;
@@ -748,7 +749,8 @@ setup_stack(struct intr_frame *if_)
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
-static bool
+bool install_page(void *upage, void *kpage, bool writable);
+bool
 install_page(void *upage, void *kpage, bool writable)
 {
    struct thread *t = thread_current();
@@ -757,7 +759,6 @@ install_page(void *upage, void *kpage, bool writable)
     * address, then map our page there. */
    return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
 }
-#else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
@@ -824,7 +825,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
       struct info *file_info = (struct info *)malloc(sizeof(struct info));
       file_info->file = file;
       file_info->offset = ofs;
-      file_info->read_bytes = read_bytes;
+      file_info->read_bytes = page_read_bytes;
 
       void *aux = file_info;
       if (!vm_alloc_page_with_initializer(VM_ANON, upage,
