@@ -38,6 +38,8 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
+struct list frame_table;
+
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
@@ -64,7 +66,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		if(p == NULL){
 			return false;
 		}
-		switch (type)
+		switch (VM_TYPE(type))
 		{
 		case VM_ANON:
 			uninit_new(p, upage, init, type, aux, anon_initializer);
@@ -173,6 +175,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	if(is_kernel_vaddr(addr) || addr == NULL){
+		return false;
+	}
+	page = spt_find_page(&thread_current()->spt,addr);
 	return vm_do_claim_page (page);
 }
 
