@@ -10,6 +10,7 @@ void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
+	
 #ifdef EFILESYS  /* For project 4 */
 	pagecache_init ();
 #endif
@@ -40,6 +41,13 @@ static struct frame *vm_evict_frame (void);
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
+/*
+	TODO:
+	인자로 전달받은 적절한 초기화 함수를 가져오고 이 함수를 인자로 갖는 uninit_new함수를 호출
+	주어진 type의 페이지 생성. 초기화되지 않은 페이지의 swap_in 핸들러는 
+	자동적으로 페이지 타입에 맞게 페이지를 초기화하고 주어진 AUX를 인자고 삼는 INIT 함수를 호출함.
+	페이지 구조체를 갖게되면 페이지를 spt에 삽입.
+*/
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
@@ -47,14 +55,29 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-
+		struct page *p = malloc(sizeof(struct page));
+		if(p == NULL){
+			free(p);
+			return false;
+		}
+		switch (type)
+		{
+		case VM_ANON:
+			uninit_new(p, upage, init, type, aux, anon_initializer);
+			break;
+		case VM_FILE:
+			uninit_new(p, upage, init, type, aux, file_backed_initializer);
+			break;
+		default:
+			break;
+		}
 		/* TODO: Insert the page into the spt. */
+		return spt_insert_page(spt, p);
 	}
 err:
 	return false;
@@ -63,10 +86,15 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
 	/* TODO: Fill this function. */
-
-	return page;
+	// struct page *page = malloc(sizeof(struct page));
+	struct page page;
+	// page->va = pg_round_down (va);
+	page.va = pg_round_down (va);
+	struct hash_elem *founded_hash_elem = hash_find(&spt->vm,&page.h_elem);
+	if(founded_hash_elem == NULL)
+		return NULL;		
+	return hash_entry(founded_hash_elem, struct page, h_elem);
 }
 
 /* Insert PAGE into spt with validation. */
@@ -75,7 +103,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
-
+	if(hash_insert(&spt->vm, &page->h_elem) != NULL){
+		succ = true;
+	}
 	return succ;
 }
 
@@ -112,7 +142,12 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-
+	frame = palloc_get_page(PAL_USER | PAL_ZERO);
+	if(frame == NULL){
+		PANIC("todo");
+	}	
+	frame->page = NULL;
+	
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -153,7 +188,10 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-
+	page = spt_find_page(&thread_current()->spt, va);
+	if(page == NULL){
+		return false;
+	}
 	return vm_do_claim_page (page);
 }
 
@@ -167,13 +205,16 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
-	return swap_in (page, frame->kva);
+	if(spt_insert_page(&thread_current()->spt, page)){
+		return swap_in (page, frame->kva);
+	}
+	return false;
 }
 
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	hash_init(&spt->vm, vm_hash_func, vm_less_func, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -187,4 +228,18 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+static unsigned vm_hash_func (const struct hash_elem *e, void *aux){
+	/* hash_entry()로 element에 대한 page 구조체 검색 */
+	/* hash_int()를 이용해서 vm_entry의 멤버 vaddr에 대한 해시값을 구하고 반환*/
+	struct page *p = hash_entry(e, struct page, h_elem);
+	return hash_int(p->va);
+}
+
+static bool vm_less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux){
+	/* hast_entry()로 각각의 element에 대한 vm_entry 구조체를 얻은 후 vaddr 비교 (b가 크면 true, a가 크면 false)*/
+	struct page *page_a = hash_entry(a, struct page, h_elem);
+	struct page *page_b = hash_entry(b, struct page, h_elem);
+	return page_b->va > page_a->va;
 }

@@ -36,6 +36,14 @@ struct file *process_get_file(int fd);
 void process_close_file(int fd);
 void remove_child_process(struct thread *cp);
 struct thread *get_child_process(int pid);
+
+struct info
+{
+	off_t offset;
+	size_t read_bytes;
+	struct file *file;
+};
+
 /* General process initializer for initd and other process. */
 static void
 process_init(void)
@@ -256,21 +264,17 @@ int process_exec(void *f_name)
       token = strtok_r(NULL, " ", &save_ptr);
       count++;
    }
-
    /* And then load the binary */
    success = load(file_name, &_if);
-
    /* If load failed, quit. */
    if (!success)
    {
       palloc_free_page(file_name);
       return -1;
    }
-
    argument_stack(parse, count, &_if.rsp);
    _if.R.rdi = count;
    _if.R.rsi = _if.rsp + 8;
-
    palloc_free_page(file_name);
 
    /* Start switched process. */
@@ -757,13 +761,29 @@ install_page(void *upage, void *kpage, bool writable)
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-
+/* 이 함수는 실행 가능한 파일의 페이지들을 초기화하는 함수이고 page fault가 발생할 때 호출됩니다.
+이 함수는 페이지 구조체와 aux를 인자로 받습니다. 
+aux는 load_segment에서 당신이 설정하는 정보입니다. 
+이 정보를 사용하여 당신은 세그먼트를 읽을 파일을 찾고 최종적으로는 세그먼트를 메모리에서 읽어야 합니다.*/
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
    /* TODO: Load the segment from the file */
    /* TODO: This called when the first page fault occurs on address VA. */
    /* TODO: VA is available when calling this function. */
+   struct file *file = ((struct info *)aux)->file;
+   off_t ofs = ((struct info *)aux)->offset;
+   uint32_t file_read_bytes = ((struct info *)aux)->read_bytes;
+   uint32_t file_zero_bytes = PGSIZE - file_read_bytes;
+   file_seek(file,ofs);
+   
+   if (file_read(file, page->frame->kva, file_read_bytes) != (int)file_read_bytes)
+   {
+      palloc_free_page(page->frame->kva);
+      return false;
+   }
+   memset(page->frame->kva + file_read_bytes, 0, file_zero_bytes);
+   return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -780,6 +800,10 @@ lazy_load_segment(struct page *page, void *aux)
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+/* 현재 코드는 메인 루프 안에서 파일로부터 읽을 바이트의 수와 0으로 채워야 할 바이트의 수를 측정합니다.
+그리고 그것은 대기 중인 오브젝트를 생성하는 vm_alloc_page_with_initializer함수를 호출합니다.
+당신은 vm_alloc_page_with_initializer에 제공할 aux 인자로써 보조 값들을 설정할 필요가 있습니다.
+당신은 바이너리 파일을 로드할 때 필수적인 정보를 포함하는 구조체를 생성하는 것이 좋습니다.*/
 static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
@@ -797,7 +821,12 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* TODO: Set up aux to pass information to the lazy_load_segment. */
-      void *aux = NULL;
+      struct info *file_info = (struct info *)malloc(sizeof(struct info));
+      file_info->file = file;
+      file_info->offset = ofs;
+      file_info->read_bytes = read_bytes;
+
+      void *aux = file_info;
       if (!vm_alloc_page_with_initializer(VM_ANON, upage,
                                           writable, lazy_load_segment, aux))
          return false;
@@ -806,6 +835,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      ofs += page_read_bytes;
    }
    return true;
 }
@@ -821,6 +851,11 @@ setup_stack(struct intr_frame *if_)
     * TODO: If success, set the rsp accordingly.
     * TODO: You should mark the page is stack. */
    /* TODO: Your code goes here */
+   success = vm_alloc_page(VM_ANON, stack_bottom, true);
+   if(success){
+		if (vm_claim_page(stack_bottom))
+			if_->rsp = (uintptr_t)USER_STACK;
+   }
 
    return success;
 }
