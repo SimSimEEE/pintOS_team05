@@ -23,6 +23,12 @@
         "tuple": "c",
         "chrono": "c",
         "compare": "c",
-        "cstddef": "c"
+        "cstddef": "c",
+        "__availability": "c",
+        "__locale": "c",
+        "bitset": "c",
+        "iterator": "c",
+        "locale": "c",
+        "optional": "c"
     }
 }
