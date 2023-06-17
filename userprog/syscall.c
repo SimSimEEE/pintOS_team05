@@ -350,8 +350,16 @@ void close(int fd)
 void check_address(void *addr)
 {
    struct thread *curr = thread_current();
-   if (!is_user_vaddr(addr))
+#ifdef VM
+   struct page *page = spt_find_page(&thread_current()->spt, addr);
+   if (is_kernel_vaddr(addr) || !addr || !page){
+      exit(-1);
+   }
+   return page;
+#else
+   if (!is_user_vaddr(addr) || pml4_get_page(curr->pml4, addr) == NULL)
    {
       exit(-1);
    }
+#endif
 }

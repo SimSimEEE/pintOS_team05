@@ -233,25 +233,25 @@ bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
 	
-	struct hash_iterator i;
-	hash_first (&i, &src->vm);
-	while (hash_next (&i)) {
-		struct page *page_src = hash_entry (hash_cur (&i), struct page, h_elem);
-		if(page_src->operations->type == VM_UNINIT){
-			enum vm_type type = page_get_type(page_src);
-			void *upage = page_src->va;
-			bool writable = page_src->writable;
-			vm_initializer *init = page_src->uninit.init;
-			void *aux = page_src->uninit.aux;
-			vm_alloc_page_with_initializer(VM_ANON, upage, writable,init, aux);
-		}
-		else{
-			struct page *new_page = (struct page *)malloc(sizeof(struct page));
-			memcpy(new_page, page_src, sizeof(struct page));
-			spt_insert_page(dst, new_page);
+	struct hash_iterator hash_iter;
+	struct page *page_src;
+	bool success = false;
+	hash_first (&hash_iter, &src->vm);
+	while (hash_next (&hash_iter)) {
+		page_src = hash_entry (hash_cur (&hash_iter), struct page, h_elem);
+		
+		success = vm_alloc_page_with_initializer(page_src->uninit.type, page_src->va, page_src->writable,page_src->uninit.init, page_src->uninit.aux);
+		if(!success) 
+			return false;
+		struct page *child_page = spt_find_page(dst, page_src->va);
+		if(page_src->frame){
+			success = vm_do_claim_page(child_page);
+			if(!success)
+				return false;
+			memcpy(child_page->frame->kva, page_src->frame->kva, PGSIZE);
 		}
 	}
-	return true;
+	return success;
 }
 
 /* Free the resource hold by the supplemental page table */
