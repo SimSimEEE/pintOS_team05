@@ -144,6 +144,9 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
    /* 3. TODO: Allocate new PAL_USER page for the child and set result to
     *    TODO: NEWPAGE. */
    newpage = palloc_get_page(PAL_USER);
+   if(newpage == NULL){
+      return false;
+   }
    /* 4. TODO: Duplicate parent's page to the new page and
     *    TODO: check whether parent's page is writable or not (set WRITABLE
     *    TODO: according to the result). */
@@ -250,7 +253,9 @@ int process_exec(void *f_name)
 
    /* We first kill the current context */
    process_cleanup();
-
+#ifdef VM
+	supplemental_page_table_init(&cur->spt);
+#endif
    // for argument parsing
    char *parse[64];
    int count = 0;
