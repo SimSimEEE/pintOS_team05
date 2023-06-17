@@ -4,7 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include <string.h>
-
+#define ONE_MB (1 << 20) // 1MB
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -160,7 +160,9 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth(void *addr UNUSED)
+{
+	vm_alloc_page(VM_ANON, addr, 1);
 }
 
 /* Handle the fault on write_protected page */
@@ -169,21 +171,35 @@ vm_handle_wp (struct page *page UNUSED) {
 }
 
 /* Return true on success */
-bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
+bool 
+vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
+						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
+{
+	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	if(is_kernel_vaddr(addr) || addr == NULL){
+	if (is_kernel_vaddr(addr) || !addr)
+	{
 		return false;
 	}
-	page = spt_find_page(&thread_current()->spt,addr);
-	if(vm_do_claim_page (page)){
-		return true;
+	struct page *page = spt_find_page(spt, addr);
+	if (page == NULL)
+	{
+		if (USER_STACK > addr && USER_STACK - ONE_MB < addr && pg_round_down(f->rsp) <= addr)
+		{
+			vm_stack_growth(pg_round_down(addr));
+			if(vm_claim_page(pg_round_down(addr))){
+				return true;
+			}
+			return false;
+		}
+		return false;
 	}
+
+	if(vm_do_claim_page(page))
+		return true;
 	return false;
+	// return vm_do_claim_page (page);
 }
 
 /* Free the page.

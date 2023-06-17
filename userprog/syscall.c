@@ -182,7 +182,7 @@ int exec(const char *cmd_line)
    char *fn_copy;
    tid_t tid;
 
-   fn_copy = palloc_get_page(PAL_ZERO);
+   fn_copy = palloc_get_page(PAL_USER | PAL_ZERO);
    if (fn_copy == NULL)
       return TID_ERROR;
    strlcpy(fn_copy, cmd_line, PGSIZE);
