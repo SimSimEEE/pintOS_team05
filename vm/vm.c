@@ -254,11 +254,17 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	return success;
 }
 
+void hash_destroy_func(struct hash_elem *e, void *aux){
+	struct page *page = hash_entry(e, struct page, h_elem);
+	vm_dealloc_page(page);
+}
+
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_destroy(&spt->vm, hash_destroy_func);
 }
 
 static unsigned vm_hash_func (const struct hash_elem *e, void *aux){

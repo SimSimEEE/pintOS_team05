@@ -180,6 +180,7 @@ pid_t fork(const char *thread_name)
 */
 int exec(const char *cmd_line)
 {
+   check_address(cmd_line);
    char *fn_copy;
    tid_t tid;
 
@@ -242,7 +243,9 @@ buffer 안에 fd 로 열려있는 파일로부터 size 바이트를 읽습니다
 */
 int read(int fd, void *buffer, unsigned size)
 {
-   check_address(buffer);
+#ifdef VM
+   check_valid_buffer(buffer, size, true);
+#endif
    int file_size;
    char *read_buffer = buffer;
    if (fd == 0)
@@ -282,6 +285,9 @@ buffer로부터 open file fd로 size 바이트를 적어줍니다.
 */
 int write(int fd, const void *buffer, unsigned size)
 {
+#ifdef VM
+   check_valid_buffer(buffer, size, false);
+#endif
    int file_size;
    if (fd == STDOUT_FILENO)
    {
@@ -290,12 +296,17 @@ int write(int fd, const void *buffer, unsigned size)
    }
    else if (fd == STDIN_FILENO)
    {
-      return -1;
+      exit(-1);
    }
    else
    {
+      struct file *write_file = process_get_file(fd);
+      if (write_file == NULL)
+      {
+         return -1;
+      }
       lock_acquire(&filesys_lock);
-      file_size = file_write(process_get_file(fd), buffer, size);
+      file_size = file_write(write_file, buffer, size);
       lock_release(&filesys_lock);
    }
    return file_size;
@@ -351,8 +362,11 @@ void check_address(void *addr)
 {
    struct thread *curr = thread_current();
 #ifdef VM
+   if (is_kernel_vaddr(addr) || !addr){
+      exit(-1);
+   }
    struct page *page = spt_find_page(&thread_current()->spt, addr);
-   if (is_kernel_vaddr(addr) || !addr || !page){
+   if(!page){
       exit(-1);
    }
    return page;
@@ -362,4 +376,13 @@ void check_address(void *addr)
       exit(-1);
    }
 #endif
+}
+
+void check_valid_buffer(void *buffer, unsigned size, bool to_write){
+   for(char i = 0; i <= size; i++){
+      struct page *page = check_address(buffer + i);
+      if(to_write == true && page->writable == false){
+         exit(-1);
+      }
+   }
 }
