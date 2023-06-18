@@ -130,8 +130,8 @@ struct thread
 #endif
 #ifdef VM
    /* Table for whole virtual memory owned by thread. */
-#endif
    struct supplemental_page_table spt;
+#endif
 
    /* Owned by thread.c. */
    struct intr_frame tf; /* Information for switching */

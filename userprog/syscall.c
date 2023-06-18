@@ -37,6 +37,8 @@ unsigned tell(int fd);
 void close(int fd);
 int process_add_file(struct file *f);
 struct file *process_get_file(int fd);
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 /* System call.
  *
@@ -115,6 +117,10 @@ void syscall_handler(struct intr_frame *f UNUSED)
       break;
    case SYS_CLOSE: /* Close a file. */
       close(f->R.rdi);
+      break;
+   case SYS_MMAP:
+      break;
+   case SYS_MUNMAP:
       break;
    default:
       thread_exit();
@@ -352,6 +358,15 @@ void close(int fd)
    process_close_file(fd);
    return file_close(close_file);
 }
+
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
+
+}
+
+void munmap (void *addr){
+
+}
+
 /*
 주소 값이 유저 영역 주소 값인지 확인
 유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)
