@@ -255,9 +255,11 @@ int process_exec(void *f_name)
 
 	/* We first kill the current context */
 	process_cleanup();
+
 #ifdef VM
 	supplemental_page_table_init(&cur->spt);
 #endif
+
 	// for argument parsing
 	char *parse[64];
 	int count = 0;
@@ -328,12 +330,11 @@ void argument_stack(char **parse, int count, void **rsp)
 
 int process_add_file(struct file *f)
 {
-	struct thread *cur = thread_current();
 
+	struct thread *cur = thread_current();
 	// 파일 객체(struct file)를 가리키는 포인터를 File Descriptor 테이블에 추가
-	// lock_acquire(&filesys_lock);
 	cur->fdt[cur->next_fd] = f;
-	// lock_release(&filesys_lock);
+
 	// 다음 File Descriptor 값 1 증가
 	cur->next_fd++;
 	// 추가된 파일 객체의 File Descriptor 반환
@@ -769,7 +770,6 @@ setup_stack(struct intr_frame *if_)
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
-
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
@@ -778,20 +778,24 @@ setup_stack(struct intr_frame *if_)
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
+	/* project 3 virtual memory */
 	struct frame *load_frame = page->frame;
-	/* TODO: Load the segment from the file */
+
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	struct file *file = ((struct info *)aux)->file;
 	off_t offset = ((struct info *)aux)->offset;
 	size_t page_read_bytes = ((struct info *)aux)->read_bytes;
 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
 	file_seek(file, offset);
+
 	if (file_read(file, load_frame->kva, page_read_bytes) != (int)page_read_bytes)
 	{
 		palloc_free_page(load_frame->kva);
 		return false;
 	}
+
 	memset(load_frame->kva + page_read_bytes, 0, page_zero_bytes);
 	return true;
 }
@@ -861,9 +865,14 @@ setup_stack(struct intr_frame *if_)
 	if (success)
 	{
 		if (vm_claim_page(stack_bottom))
+		{
 			if_->rsp = (uintptr_t)USER_STACK;
+		}
 	}
 
 	return success;
 }
+
 #endif /* VM */
+
+////

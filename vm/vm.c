@@ -152,6 +152,8 @@ vm_get_frame(void)
 static void
 vm_stack_growth(void *addr UNUSED)
 {
+	struct thread *cur = thread_current();
+	vm_alloc_page(VM_ANON, addr, true);
 }
 
 /* Handle the fault on write_protected page */
@@ -160,22 +162,36 @@ vm_handle_wp(struct page *page UNUSED)
 {
 }
 
-/* Return true on success */
+// /* Return true on success */
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
+	struct thread *cur = thread_current();
 	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
-	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	if (is_kernel_vaddr(addr))
+	if (is_kernel_vaddr(addr) || !addr)
+	{
 		return false;
-	page = spt_find_page(spt, addr);
+	}
+	struct page *page = spt_find_page(spt, addr);
+	if (page == NULL)
+	{
+		if (addr > USER_STACK - (1 << 20) && addr < USER_STACK - PGSIZE && pg_round_down(f->rsp) <= addr)
+		{
+			vm_stack_growth(pg_round_down(addr));
+			if (vm_claim_page(pg_round_down(addr)))
+			{
+				return true;
+			}
+			return false;
+		}
+		return false;
+	}
 	if (vm_do_claim_page(page))
 		return true;
 	return false;
 }
-
 /* Free the page.
  * DO NOT MODIFY THIS FUNCTION. */
 void vm_dealloc_page(struct page *page)
@@ -276,3 +292,4 @@ static bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b)
 	struct page *comp_b = hash_entry(b, struct page, h_elem);
 	return comp_a->va < comp_b->va;
 }
+////

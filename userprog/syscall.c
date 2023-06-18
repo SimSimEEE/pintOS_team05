@@ -269,7 +269,7 @@ buffer로부터 open file fd로 size 바이트를 적어줍니다.
 int write(int fd, const void *buffer, unsigned size)
 {
 #ifndef VM
-   check_valid_buffer(buffer, size, 0);
+   check_valid_buffer(buffer, size, false);
 #endif
    int file_size;
    if (fd == STDOUT_FILENO)
@@ -344,14 +344,18 @@ struct page *check_address(void *addr)
 {
    struct thread *curr = thread_current();
 #ifdef VM
+   if (is_kernel_vaddr(addr) || addr)
+   {
+      exit(-1);
+   }
    struct page *page = spt_find_page(&thread_current()->spt, addr);
-   if (is_kernel_vaddr(addr) || !addr || !page)
+   if (!page)
    {
       exit(-1);
    }
    return page;
 #else
-   if (!is_user_vaddr(addr) || pml4_get_page(curr->pml4, addr) == NULL)
+   if (is_user_vaddr(addr) || pml4_get_page(curr->pml4, addr) == NULL)
    {
       exit(-1);
    }
@@ -363,9 +367,10 @@ void check_valid_buffer(void *buffer, unsigned size, bool to_write)
    for (char i = 0; i <= size; i++)
    {
       struct page *page = check_address(buffer + i);
-      if (to_write == false && page->writable == false)
+      if (to_write == true && page->writable == false)
       {
          exit(-1);
       }
    }
 }
+////
