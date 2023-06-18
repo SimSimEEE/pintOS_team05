@@ -138,7 +138,7 @@ static struct frame *
 vm_get_frame(void)
 {
 	struct frame *frame = (struct frame *)malloc(sizeof(struct frame));
-	frame->kva = palloc_get_page(PAL_ZERO);
+	frame->kva = palloc_get_page(PAL_USER);
 	if (frame->kva == NULL)
 		PANIC("todo");
 	frame->page = NULL;
@@ -223,6 +223,34 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 								  struct supplemental_page_table *src UNUSED)
 {
+	struct hash_iterator hash_iter;
+	struct page *parent_page;
+	bool success = false;
+	hash_first(&hash_iter, &src->vm);
+	while (hash_next(&hash_iter))
+	{
+		parent_page = hash_entry(hash_cur(&hash_iter), struct page, h_elem);
+		success = vm_alloc_page_with_initializer(parent_page->uninit.type, parent_page->va, parent_page->writable, parent_page->uninit.init, parent_page->uninit.aux);
+		if (!success)
+			return false;
+		struct page *child_page = spt_find_page(dst, parent_page->va);
+		if (parent_page->frame)
+		{
+			success = vm_do_claim_page(child_page);
+			if (!success)
+			{
+				return false;
+			}
+			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+		}
+	}
+	return success;
+}
+
+void hash_destroy_func(struct hash_elem *e, void *aux)
+{
+	struct page *page = hash_entry(e, struct page, h_elem);
+	vm_dealloc_page(page);
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -230,6 +258,7 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_destroy(&spt->vm, hash_destroy_func);
 }
 
 static unsigned vm_hash_func(const struct hash_elem *e, void *aux)
