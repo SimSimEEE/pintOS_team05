@@ -162,6 +162,7 @@ static void
 vm_stack_growth(void *addr UNUSED)
 {
 	vm_alloc_page(VM_ANON, addr, 1);
+	thread_current()->save_stack_bottom -= PGSIZE;
 }
 
 /* Handle the fault on write_protected page */
@@ -184,10 +185,11 @@ vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = spt_find_page(spt, addr);
 	if (page == NULL)
 	{
-		if (USER_STACK > addr && USER_STACK - ONE_MB < addr && pg_round_down(f->rsp) <= addr)
+		if (USER_STACK > addr && USER_STACK - ONE_MB < addr && f->rsp-8 <= addr && thread_current()->save_stack_bottom > addr)
 		{
-			vm_stack_growth(pg_round_down(addr));
-			if(vm_claim_page(pg_round_down(addr))){
+			addr = thread_current()->save_stack_bottom - PGSIZE;
+			vm_stack_growth(addr);
+			if(vm_claim_page(addr)){
 				return true;
 			}
 			return false;

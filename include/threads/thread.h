@@ -130,6 +130,7 @@ struct thread
    /* Table for whole virtual memory owned by thread. */
    struct supplemental_page_table spt;
 #endif
+   intptr_t save_stack_bottom;
 
    /* Owned by thread.c. */
    struct intr_frame tf; /* Information for switching */

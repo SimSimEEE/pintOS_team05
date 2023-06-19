@@ -38,6 +38,7 @@ unsigned tell(int fd);
 void close(int fd);
 int process_add_file(struct file *f);
 struct file *process_get_file(int fd);
+void check_valid_buffer(void *buffer, unsigned size, bool to_write);
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
 void munmap (void *addr);
 
