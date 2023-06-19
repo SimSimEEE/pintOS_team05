@@ -31,7 +31,7 @@ test_main (void)
   munmap ((void *) 0x10000000);
 
   msg ("validate contents.");
-
+  
   CHECK ((handle = open ("large.txt")) > 1, "open \"large.txt\"");
   CHECK (0x1000 == read (handle, buf, 0x1000), "read \"large.txt\" Page 0");
 

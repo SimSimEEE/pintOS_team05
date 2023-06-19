@@ -15,6 +15,7 @@
 #include "threads/synch.h"
 #include "filesys/file.h"
 #include "userprog/process.h"
+#include "vm/vm.h"
 #include <string.h>
 
 void syscall_entry(void);
@@ -37,6 +38,8 @@ unsigned tell(int fd);
 void close(int fd);
 int process_add_file(struct file *f);
 struct file *process_get_file(int fd);
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 /* System call.
  *
@@ -115,6 +118,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
       break;
    case SYS_CLOSE: /* Close a file. */
       close(f->R.rdi);
+      break;
+   case SYS_MMAP:
+      f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+      break;
+   case SYS_MUNMAP:
+      munmap(f->R.rdi);
       break;
    default:
       thread_exit();
@@ -352,6 +361,35 @@ void close(int fd)
    process_close_file(fd);
    return file_close(close_file);
 }
+
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+   if (is_kernel_vaddr(addr) || !addr  || pg_round_down(addr) != addr || !length || length >= (1<<23))
+      return NULL;
+   if (fd < FD_MIN || fd > FD_MAX)
+      return NULL;
+   if (offset % PGSIZE != 0 )
+      return NULL;
+   if (spt_find_page(&thread_current()->spt, addr))
+      return NULL;
+   struct file *mmap_file = process_get_file(fd);
+   if (mmap_file == NULL)
+      return NULL;
+   mmap_file = file_reopen(mmap_file);
+   if (mmap_file == NULL)
+      return NULL;
+   off_t file_ln = file_length(mmap_file);
+   if (file_ln <= 0)
+      return NULL;
+   return do_mmap(addr, file_ln, writable, mmap_file, offset);
+}
+
+void munmap (void *addr){
+   if(is_kernel_vaddr(addr) || !addr)
+      return NULL;
+   do_munmap(addr);
+}
+
 /*
 주소 값이 유저 영역 주소 값인지 확인
 유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)
