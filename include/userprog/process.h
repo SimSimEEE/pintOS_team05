@@ -15,4 +15,13 @@ void process_close_file(int fd);
 void remove_child_process(struct thread *cp);
 bool install_page(void *upage, void *kpage, bool writable);
 
+bool lazy_load_segment(struct page *page, void *aux);
+
+struct info
+{
+    off_t offset;
+    size_t read_bytes;
+    struct file *file;
+};
+
 #endif /* userprog/process.h */
