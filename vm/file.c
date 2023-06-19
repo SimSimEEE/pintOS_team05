@@ -49,28 +49,30 @@ file_backed_destroy (struct page *page) {
 }
 
 /* Do the mmap */
+/* Do the mmap */
 void *
-do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offset) {
-
-	off_t init_ofs = offset;
-	off_t ofs = offset;
-	uint32_t read_bytes = length;
+do_mmap(void *addr, size_t length, int writable,
+		struct file *file, off_t offset)
+{
+	size_t read_bytes = length;
 	void *init_addr = addr;
-   	while (read_bytes > 0)
-   	{
+	while (read_bytes > 0)
+	{
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 
 		struct info *aux = (struct info *)malloc(sizeof(struct info));
 		aux->file = file;
-		aux->offset = ofs;
+		aux->offset = offset;
 		aux->read_bytes = page_read_bytes;
-		vm_alloc_page_with_initializer(VM_FILE, addr,
-											writable, lazy_load_segment, aux);
 
-		/* Advance. */
+		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_segment, aux))
+		{
+			return;
+		}
+
 		read_bytes -= page_read_bytes;
 		addr += PGSIZE;
-		ofs += page_read_bytes;
+		offset += page_read_bytes;
 	}
 	return init_addr;
 }
@@ -80,23 +82,23 @@ void do_munmap(void *addr)
 {
 	struct thread *cur = thread_current();
 	struct page *page = spt_find_page(&cur->spt, addr);
-	if(page == NULL)
+	if (page == NULL)
 		return;
 	struct info *file_info = page->uninit.aux;
-	struct file *file = file_info->file;
-	if(file != NULL)
+	if (!file_info->file)
 		return;
-	while(page != NULL){
-		if(pml4_is_dirty(cur->pml4, addr)){
+	while (page != NULL)
+	{
+		if (pml4_is_dirty(cur->pml4, addr))
+		{
 			lock_acquire(&filesys_lock);
-			file_seek(file_info->file,file_info->offset);
-			file_write(file_info->file,page->frame->kva,file_info->read_bytes);
+			file_seek(file_info->file, file_info->offset);
+			file_write(file_info->file, page->frame->kva, file_info->read_bytes);
 			lock_release(&filesys_lock);
-			pml4_set_dirty(cur->pml4,addr,false);
+			pml4_set_dirty(cur->pml4, addr, false);
 		}
-		// pml4_clear_page(cur->pml4, page->va);
-		pml4_clear_page(cur->pml4, addr); //@@@@@@@@@@@@
+		pml4_clear_page(cur->pml4, addr);
 		addr += PGSIZE;
-		page = spt_find_page(&cur->spt,addr);
+		page = spt_find_page(&cur->spt, addr);
 	}
 }
