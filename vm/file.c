@@ -7,6 +7,8 @@
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
+void exit_do_munmap(struct supplemental_page_table *cur_spt);
+
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
@@ -100,5 +102,17 @@ void do_munmap(void *addr)
 		pml4_clear_page(cur->pml4, addr);
 		addr += PGSIZE;
 		page = spt_find_page(&cur->spt, addr);
+	}
+}
+
+void exit_do_munmap(struct supplemental_page_table *cur_spt){
+   struct hash_iterator hash_iter;
+	struct page *page_exit;
+   	struct supplemental_page_table *spt = cur_spt;
+	hash_first (&hash_iter, &spt->vm);
+	while (hash_next (&hash_iter)) {
+		page_exit = hash_entry (hash_cur (&hash_iter), struct page, h_elem);
+		if(page_exit->operations->type == VM_FILE)
+			do_munmap(page_exit->va);
 	}
 }

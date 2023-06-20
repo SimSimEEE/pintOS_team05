@@ -185,7 +185,7 @@ vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = spt_find_page(spt, addr);
 	if (page == NULL)
 	{
-		if (USER_STACK > addr && USER_STACK - ONE_MB < addr && f->rsp-8 <= addr && thread_current()->save_stack_bottom > addr)
+		if (USER_STACK >= addr && USER_STACK - ONE_MB <= addr && f->rsp-8 <= addr && thread_current()->save_stack_bottom >= addr)
 		{
 			addr = thread_current()->save_stack_bottom - PGSIZE;
 			vm_stack_growth(addr);

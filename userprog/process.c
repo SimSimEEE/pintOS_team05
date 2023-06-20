@@ -37,8 +37,6 @@ void process_close_file(int fd);
 void remove_child_process(struct thread *cp);
 struct thread *get_child_process(int pid);
 
-
-
 /* General process initializer for initd and other process. */
 static void
 process_init(void)
@@ -383,8 +381,13 @@ void process_exit(void)
    for (int i = 2; i < 64; i++)
       close(i);
    file_close(cur->running_file);
+
+	if(!hash_empty(&cur->spt.vm))
+      exit_do_munmap(&cur->spt.vm);
+
    sema_up(&cur->exit_sema);
    sema_down(&cur->free_sema);
+
    process_cleanup(); // pml4를 날림(이 함수를 call 한 thread의 pml4)
 }
 
