@@ -9,6 +9,7 @@
  * intialize codes. */
 void
 vm_init (void) {
+	list_init(&frame_list);
 	vm_anon_init ();
 	vm_file_init ();
 	
@@ -38,8 +39,6 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
-
-struct list frame_table;
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -119,22 +118,48 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 
 /* Get the struct frame, that will be evicted. */
 static struct frame *
-vm_get_victim (void) {
+vm_get_victim(void)
+{
+	// //TODO: 희생자 선택
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
-
-	return victim;
+	struct frame *save_victim = NULL;
+	int tick = 0;
+	/* TODO: The policy for eviction is up to you. */
+	struct thread *cur_thread = thread_current();
+	struct list_elem *e = &victim->frame_elem;
+	
+	for (e = list_begin (&frame_list); e != list_end (&frame_list); e = list_next (&frame_list)){
+		victim = list_entry(e,struct frame,frame_elem);
+		if(pml4_is_accessed(cur_thread->pml4,victim->page->va)){
+			tick++;
+			pml4_set_accessed(cur_thread->pml4,victim->page->va,0);
+			if(tick == 1){
+				save_victim = victim;
+			}
+		}
+	}
+	for (e = list_begin (&frame_list); e != list_end (&frame_list); e = list_next (&frame_list)){
+		victim = list_entry(e,struct frame,frame_elem);
+		if(!pml4_is_accessed(cur_thread->pml4,victim->page->va)){
+			pml4_set_accessed(cur_thread->pml4,victim->page->va,1);
+		}
+	}
+	return save_victim;
 }
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *
-vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
+vm_evict_frame(void)
+{
+	// TODO: 희생자 올리기
+	struct frame *victim UNUSED = vm_get_victim();
 	/* TODO: swap out the victim and return the evicted frame. */
+	swap_out(victim->page);
 
-	return NULL;
+	return victim;
 }
+
 
 /* palloc() and get frame. If there is no available page, evict the page
  * and return it. This always return valid address. That is, if the user pool
@@ -146,12 +171,16 @@ vm_get_frame (void) {
 	/* TODO: Fill this function. */
 	frame = malloc(sizeof(struct frame));
 	frame->kva = palloc_get_page(PAL_USER);
+	
+	// printf("\n\n@@@@@@33333@@@@@@@\n\n");
 	if(frame->kva == NULL){
-		frame->page = NULL;
-		PANIC("todo");
+		frame = vm_evict_frame();
 	}	
 	frame->page = NULL;
+	// printf("\n\n@@@@@@22222@@@@@@@\n\n");
 	
+	list_push_back(&frame_list, &frame->frame_elem);
+
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;

@@ -85,7 +85,7 @@ void do_munmap(void *addr)
 	struct thread *cur = thread_current();
 	struct page *page = spt_find_page(&cur->spt, addr);
 	if (page == NULL)
-		return;
+		return; 
 	struct info *file_info = page->uninit.aux;
 	if (!file_info->file)
 		return;
@@ -97,7 +97,7 @@ void do_munmap(void *addr)
 			file_seek(file_info->file, file_info->offset);
 			file_write(file_info->file, page->frame->kva, file_info->read_bytes);
 			lock_release(&filesys_lock);
-			pml4_set_dirty(cur->pml4, addr, false);
+			// pml4_set_dirty(cur->pml4, addr, false);
 		}
 		pml4_clear_page(cur->pml4, addr);
 		addr += PGSIZE;
