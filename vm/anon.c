@@ -4,14 +4,13 @@
 #include "devices/disk.h"
 #include "lib/kernel/bitmap.h"
 
+size_t disk_slice_size = PGSIZE/DISK_SECTOR_SIZE;
+
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
 static bool anon_swap_in (struct page *page, void *kva);
 static bool anon_swap_out (struct page *page);
 static void anon_destroy (struct page *page);
-disk_sector_t dsize;
-
-#define disk_slice_size DISK_SECTOR_SIZE/PGSIZE
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations anon_ops = {
@@ -26,7 +25,7 @@ void
 vm_anon_init (void) {
 	/* TODO: Set up the swap_disk. */
 	swap_disk = disk_get(1,1);
-	dsize = disk_size(swap_disk) * DISK_SECTOR_SIZE / PGSIZE;
+	disk_sector_t dsize = disk_size(swap_disk) / disk_slice_size;
 	swap_table = bitmap_create(dsize);
 }
 
@@ -45,34 +44,36 @@ static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
 	// TODO: 디스크에 read시 해당 위치에 값이 없을 수도 있음.
-	if(page == NULL){
+	// if(page == NULL){
+	// 	return false;
+	// }
+	size_t index = anon_page->index;
+	if(!bitmap_test(swap_table,index)){
 		return false;
 	}
-	size_t index = anon_page->index;
 	for(int i = 0; i < 8; i++){
-		disk_read(swap_disk, index * dsize + i, page->va + i * DISK_SECTOR_SIZE);
+		disk_read(swap_disk, index * disk_slice_size + i, kva + i * DISK_SECTOR_SIZE);
 	}
 	bitmap_set(swap_table,index,0);
 	anon_page->index = -1;
+
 	return true;
 }
-
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
-	size_t index = bitmap_scan(swap_table, 0, 1, 0);
+	size_t index = bitmap_scan(swap_table, 0, 1, false);
 	if(index == BITMAP_ERROR){
 		return false;
 	}
 	for(int i = 0; i < 8; i++){
-		disk_write(swap_disk, index * dsize + i, page->va + i * DISK_SECTOR_SIZE);
+		disk_write(swap_disk, index * disk_slice_size + i, page->va + i * DISK_SECTOR_SIZE);
 	}
-	anon_page->index = index;
 	bitmap_set(swap_table, index, 1);
-	palloc_free_page(page->frame->kva);
 	pml4_clear_page(thread_current()->pml4, page->va);
+	anon_page->index = index;
 	return true;
 }
 

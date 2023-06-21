@@ -38,6 +38,7 @@ struct page_operations;
 struct thread;
 struct list frame_list;
 struct bitmap *swap_table;
+struct list_elem *start_clock;
 
 #define VM_TYPE(type) ((type) & 7)
 

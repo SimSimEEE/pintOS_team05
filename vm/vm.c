@@ -4,12 +4,13 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include <string.h>
+#include "include/threads/mmu.h"
+
 #define ONE_MB (1 << 20) // 1MB
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
 vm_init (void) {
-	list_init(&frame_list);
 	vm_anon_init ();
 	vm_file_init ();
 	
@@ -19,6 +20,8 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	list_init(&frame_list);
+	start_clock = list_begin(&frame_list);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -120,32 +123,42 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 static struct frame *
 vm_get_victim(void)
 {
-	// //TODO: 희생자 선택
-	struct frame *victim = NULL;
-	struct frame *save_victim = NULL;
-	int tick = 0;
 	/* TODO: The policy for eviction is up to you. */
-	struct thread *cur_thread = thread_current();
-	struct list_elem *e = &victim->frame_elem;
-	
-	for (e = list_begin (&frame_list); e != list_end (&frame_list); e = list_next (&frame_list)){
-		victim = list_entry(e,struct frame,frame_elem);
-		if(pml4_is_accessed(cur_thread->pml4,victim->page->va)){
-			tick++;
-			pml4_set_accessed(cur_thread->pml4,victim->page->va,0);
-			if(tick == 1){
-				save_victim = victim;
-			}
+	struct list_elem *victim_elem = list_pop_front(&frame_list);
+	struct frame *victim = list_entry(victim_elem, struct frame, frame_elem);
+	struct list_elem *search_elem = start_clock;
+
+	for (; start_clock != list_end(&frame_list); start_clock = list_next(start_clock))
+	{
+		victim = list_entry(start_clock, struct frame, frame_elem);
+
+		if (pml4_is_accessed(thread_current()->pml4, victim->page->va))
+		{
+			pml4_set_accessed(thread_current()->pml4, victim->page->va, 0);
+		}
+		else
+		{
+			return victim;
 		}
 	}
-	for (e = list_begin (&frame_list); e != list_end (&frame_list); e = list_next (&frame_list)){
-		victim = list_entry(e,struct frame,frame_elem);
-		if(!pml4_is_accessed(cur_thread->pml4,victim->page->va)){
-			pml4_set_accessed(cur_thread->pml4,victim->page->va,1);
+
+	for (start_clock = list_begin(&frame_list); start_clock != search_elem; start_clock = list_next(start_clock))
+	{
+		victim = list_entry(start_clock, struct frame, frame_elem);
+
+		if (pml4_is_accessed(thread_current()->pml4, victim->page->va))
+		{
+			pml4_set_accessed(thread_current()->pml4, victim->page->va, 0);
+		}
+		else
+		{
+			return victim;
 		}
 	}
-	return save_victim;
+
+	return victim;
 }
+
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
@@ -172,13 +185,10 @@ vm_get_frame (void) {
 	frame = malloc(sizeof(struct frame));
 	frame->kva = palloc_get_page(PAL_USER);
 	
-	// printf("\n\n@@@@@@33333@@@@@@@\n\n");
 	if(frame->kva == NULL){
 		frame = vm_evict_frame();
 	}	
 	frame->page = NULL;
-	// printf("\n\n@@@@@@22222@@@@@@@\n\n");
-	
 	list_push_back(&frame_list, &frame->frame_elem);
 
 	ASSERT (frame != NULL);
@@ -187,11 +197,14 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
+static bool
 vm_stack_growth(void *addr UNUSED)
 {
-	vm_alloc_page(VM_ANON, addr, 1);
-	thread_current()->save_stack_bottom -= PGSIZE;
+	if(vm_alloc_page(VM_ANON, addr, 1)){
+		thread_current()->save_stack_bottom -= PGSIZE;
+		return true;
+	}
+	return false;
 }
 
 /* Handle the fault on write_protected page */
@@ -211,25 +224,15 @@ vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	{
 		return false;
 	}
-	struct page *page = spt_find_page(spt, addr);
-	if (page == NULL)
+	if (not_present)
 	{
 		if (USER_STACK >= addr && USER_STACK - ONE_MB <= addr && f->rsp-8 <= addr && thread_current()->save_stack_bottom >= addr)
 		{
 			addr = thread_current()->save_stack_bottom - PGSIZE;
 			vm_stack_growth(addr);
-			if(vm_claim_page(addr)){
-				return true;
-			}
-			return false;
 		}
-		return false;
 	}
-
-	if(vm_do_claim_page(page))
-		return true;
-	return false;
-	// return vm_do_claim_page (page);
+	return vm_claim_page(addr);
 }
 
 /* Free the page.

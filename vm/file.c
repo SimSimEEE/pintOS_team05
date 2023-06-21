@@ -9,7 +9,6 @@ static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
 void exit_do_munmap(struct supplemental_page_table *cur_spt);
 
-
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
 	.swap_in = file_backed_swap_in,
