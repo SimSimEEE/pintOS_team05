@@ -4,8 +4,6 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include <string.h>
-#include "include/threads/mmu.h"
-
 #define ONE_MB (1 << 20) // 1MB
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -120,43 +118,23 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 }
 
 /* Get the struct frame, that will be evicted. */
-static struct frame *
-vm_get_victim(void)
+static struct frame* vm_get_victim(void)
 {
-	/* TODO: The policy for eviction is up to you. */
-	struct list_elem *victim_elem = list_pop_front(&frame_list);
-	struct frame *victim = list_entry(victim_elem, struct frame, frame_elem);
-	struct list_elem *search_elem = start_clock;
+    struct list_elem* victim_elem;
+    struct frame* victim;
+    
+    while (true) {
+        victim_elem = list_pop_front(&frame_list);
+        victim = list_entry(victim_elem, struct frame, frame_elem);
 
-	for (; start_clock != list_end(&frame_list); start_clock = list_next(start_clock))
-	{
-		victim = list_entry(start_clock, struct frame, frame_elem);
+        if (!pml4_is_accessed(thread_current()->pml4, victim->page->va))
+            break;
 
-		if (pml4_is_accessed(thread_current()->pml4, victim->page->va))
-		{
-			pml4_set_accessed(thread_current()->pml4, victim->page->va, 0);
-		}
-		else
-		{
-			return victim;
-		}
-	}
+        pml4_set_accessed(thread_current()->pml4, victim->page->va, 0);
+        list_push_back(&frame_list, victim_elem);
+    }
 
-	for (start_clock = list_begin(&frame_list); start_clock != search_elem; start_clock = list_next(start_clock))
-	{
-		victim = list_entry(start_clock, struct frame, frame_elem);
-
-		if (pml4_is_accessed(thread_current()->pml4, victim->page->va))
-		{
-			pml4_set_accessed(thread_current()->pml4, victim->page->va, 0);
-		}
-		else
-		{
-			return victim;
-		}
-	}
-
-	return victim;
+    return victim;
 }
 
 
@@ -197,7 +175,7 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static bool
+static void
 vm_stack_growth(void *addr UNUSED)
 {
 	if(vm_alloc_page(VM_ANON, addr, 1)){

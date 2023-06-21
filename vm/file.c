@@ -35,12 +35,47 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	if(page == NULL){
+		return false;
+	}
+	struct info *aux = (struct info *)page->uninit.aux;
+
+	struct file *file = aux->file;
+	off_t offset = aux->offset;
+	size_t page_read_bytes = aux->read_bytes;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+	file_seek(file, offset);
+
+	if (file_read(file, kva, page_read_bytes) != (int)page_read_bytes)
+	{
+		return false;
+	}
+
+	memset(kva + page_read_bytes, 0, page_zero_bytes);
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+
+	if(page == NULL){
+		return false;
+	}
+	struct info *aux = page->uninit.aux;
+
+	if (pml4_is_dirty(thread_current()->pml4, page->va))
+	{
+		lock_acquire(&filesys_lock);
+		file_seek(aux->file, aux->offset);
+		file_write(aux->file, page->va, aux->read_bytes);
+		lock_release(&filesys_lock);
+		pml4_set_dirty(thread_current()->pml4, page->va, false);
+	}
+	pml4_clear_page(thread_current()->pml4, page->va);
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
