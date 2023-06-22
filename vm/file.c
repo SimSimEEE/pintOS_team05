@@ -70,7 +70,7 @@ file_backed_swap_out (struct page *page) {
 	{
 		lock_acquire(&filesys_lock);
 		file_seek(aux->file, aux->offset);
-		file_write(aux->file, page->va, aux->read_bytes);
+		file_write(aux->file, page->frame->kva, aux->read_bytes);
 		lock_release(&filesys_lock);
 		pml4_set_dirty(thread_current()->pml4, page->va, false);
 	}
@@ -84,7 +84,6 @@ file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 }
 
-/* Do the mmap */
 /* Do the mmap */
 void *
 do_mmap(void *addr, size_t length, int writable,
@@ -103,6 +102,7 @@ do_mmap(void *addr, size_t length, int writable,
 
 		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_segment, aux))
 		{
+			free(aux);
 			return;
 		}
 

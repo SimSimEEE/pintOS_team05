@@ -416,7 +416,7 @@ struct page *check_address(void *addr)
 }
 
 void check_valid_buffer(void *buffer, unsigned size, bool to_write){
-   for(char i = 0; i <= size; i++){
+   for(char i = 0; i < size; i++){
       struct page *page = check_address(buffer + i);
       if(to_write == true && page->writable == false){
          exit(-1);
