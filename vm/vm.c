@@ -266,9 +266,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	hash_first (&hash_iter, &src->vm);
 	while (hash_next (&hash_iter)) {
 		page_src = hash_entry (hash_cur (&hash_iter), struct page, h_elem);
-		
 		success = vm_alloc_page_with_initializer(page_src->uninit.type, page_src->va, page_src->writable,page_src->uninit.init, page_src->uninit.aux);
-		if(!success) 
+		if(!success)
 			return false;
 		struct page *child_page = spt_find_page(dst, page_src->va);
 		if(page_src->frame){
