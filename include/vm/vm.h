@@ -86,6 +86,7 @@ struct frame
 {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
@@ -139,5 +140,7 @@ enum vm_type page_get_type(struct page *page);
 /* Project 3️⃣ */
 static unsigned vm_hash_func(const struct hash_elem *e, void *aux);
 static bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b);
+
+struct list *frame_table;
 
 #endif /* VM_VM_H */

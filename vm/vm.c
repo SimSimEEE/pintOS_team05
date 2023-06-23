@@ -153,7 +153,12 @@ static void
 vm_stack_growth(void *addr UNUSED)
 {
 	struct thread *cur = thread_current();
-	vm_alloc_page(VM_ANON, addr, true);
+	if (vm_alloc_page(VM_ANON, pg_round_down(addr), true))
+	{
+		thread_current()->stack_bottom -= PGSIZE;
+		return true;
+	}
+	return false;
 }
 
 /* Handle the fault on write_protected page */
@@ -167,31 +172,22 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
 	struct thread *cur = thread_current();
-	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
+	struct supplemental_page_table *spt = &thread_current()->spt;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	if (is_kernel_vaddr(addr) || !addr)
-	{
 		return false;
-	}
-	struct page *page = spt_find_page(spt, addr);
-	if (page == NULL)
+	if (not_present)
 	{
-		if (addr > USER_STACK - (1 << 20) && addr < USER_STACK - PGSIZE && pg_round_down(f->rsp) <= addr)
+		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr < thread_current()->stack_bottom)
 		{
-			vm_stack_growth(pg_round_down(addr));
-			if (vm_claim_page(pg_round_down(addr)))
-			{
-				return true;
-			}
-			return false;
+			addr = thread_current()->stack_bottom - PGSIZE;
+			vm_stack_growth(addr);
 		}
-		return false;
 	}
-	if (vm_do_claim_page(page))
-		return true;
-	return false;
+	return vm_claim_page(addr);
 }
+
 /* Free the page.
  * DO NOT MODIFY THIS FUNCTION. */
 void vm_dealloc_page(struct page *page)

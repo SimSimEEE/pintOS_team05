@@ -380,6 +380,7 @@ void check_valid_buffer(void *buffer, unsigned size, bool to_write)
    }
 }
 
+/* 프로세스 주소공간에 파일을 매핑하는 함수 */
 void *mmap(void *addr, size_t length, int writable,
            int fd, off_t offset)
 {

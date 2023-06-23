@@ -859,6 +859,7 @@ setup_stack(struct intr_frame *if_)
 		if (vm_claim_page(stack_bottom))
 		{
 			if_->rsp = (uintptr_t)USER_STACK;
+			thread_current()->stack_bottom = stack_bottom;
 		}
 	}
 
