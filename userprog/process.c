@@ -388,7 +388,11 @@ void process_exit(void)
 	for (int i = FD_MIN; i < FD_MAX; i++)
 		close(i);
 	palloc_free_multiple(cur->fdt, 3);
-	cur->fdt = NULL;
+// cur->fdt = NULL;
+#ifdef VM
+	if (!hash_empty(&cur->spt))
+		iter_munmap();
+#endif
 	file_close(cur->running_file);
 	sema_up(&cur->exit_sema);
 	sema_down(&cur->free_sema);

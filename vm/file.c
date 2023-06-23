@@ -107,3 +107,15 @@ void do_munmap(void *addr)
 		page = spt_find_page(&cur->spt, addr);
 	}
 }
+
+void iter_munmap(void)
+{
+	struct hash_iterator hash_iter;
+	hash_first(&hash_iter, &thread_current()->spt.vm);
+	while (hash_next(&hash_iter))
+	{
+		struct page *page = hash_entry(hash_cur(&hash_iter), struct page, h_elem);
+		if (page->operations->type == VM_FILE)
+			do_munmap(page->va);
+	}
+}

@@ -141,6 +141,7 @@ enum vm_type page_get_type(struct page *page);
 static unsigned vm_hash_func(const struct hash_elem *e, void *aux);
 static bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b);
 
-struct list *frame_table;
+struct list frame_table;
+struct bitmap *swap_table;
 
 #endif /* VM_VM_H */
