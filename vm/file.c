@@ -26,9 +26,16 @@ vm_file_init (void) {
 bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
+	// page->operations = &file_ops;
+
+	// struct file_page *file_page = &page->file;
+
+	struct file *file = ((struct info*)page ->uninit.aux)->file;
 	page->operations = &file_ops;
 
 	struct file_page *file_page = &page->file;
+	file_page -> file = file;
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -119,10 +126,10 @@ do_mmap(void *addr, size_t length, int writable,
 	{
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 
-		struct info *aux = (struct info *)malloc(sizeof(struct info));
-		aux->file = file;
-		aux->offset = offset;
-		aux->read_bytes = page_read_bytes;
+		struct file_page *aux = (struct file_page *)malloc(sizeof(struct file_page));
+		aux->file = (struct file_page *)file;
+		aux->offset = (struct file_page *)offset;
+		aux->read_bytes = (struct file_page *)page_read_bytes;
 
 		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_mmap, aux))
 		{
