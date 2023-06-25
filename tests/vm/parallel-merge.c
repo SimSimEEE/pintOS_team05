@@ -136,6 +136,7 @@ verify (void)
             fail ("bad value %d in byte %zu", buf2[buf_idx], buf_idx);
           buf_idx++;
         }
+        // msg ("@@@@@ %d : | buf2[%zu] = %d | buf_idx = %zu",hist_idx, buf_idx-1, buf2[buf_idx-1], buf_idx-1);
     }
 
   msg ("success, buf_idx=%'zu", buf_idx);
