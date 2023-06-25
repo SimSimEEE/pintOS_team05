@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 #include "kernel/hash.h"
+#include "include/lib/kernel/bitmap.h"
 
 enum vm_type
 {

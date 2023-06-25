@@ -388,15 +388,10 @@ void process_exit(void)
 	for (int i = FD_MIN; i < FD_MAX; i++)
 		close(i);
 	palloc_free_multiple(cur->fdt, 3);
-// cur->fdt = NULL;
-#ifdef VM
-	if (!hash_empty(&cur->spt))
-		iter_munmap();
-#endif
 	file_close(cur->running_file);
 	sema_up(&cur->exit_sema);
-	sema_down(&cur->free_sema);
 	process_cleanup(); // pml4를 날림(이 함수를 call 한 thread의 pml4)
+	sema_down(&cur->free_sema);
 }
 
 /* Free the current process's resources. */
@@ -789,6 +784,7 @@ bool lazy_load_segment(struct page *page, void *aux)
 	if (file_read(file, load_frame->kva, page_read_bytes) != (int)page_read_bytes)
 	{
 		palloc_free_page(load_frame->kva);
+		free(aux);
 		return false;
 	}
 

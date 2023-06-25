@@ -370,7 +370,7 @@ struct page *check_address(void *addr)
 
 void check_valid_buffer(void *buffer, unsigned size, bool to_write)
 {
-   for (char i = 0; i <= size; i++)
+   for (char i = 0; i < size; i++)
    {
       struct page *page = check_address(buffer + i);
       if (to_write == true && page->writable == false)
@@ -386,7 +386,7 @@ void *mmap(void *addr, size_t length, int writable,
 {
    if (is_kernel_vaddr(addr) || !addr || pg_round_down(addr) != addr)
       return NULL;
-   if (length <= 0 || length >= (1 << 23))
+   if (length <= 0 || length >= (1 << 22))
       return NULL;
    if (fd < FD_MIN || fd >= FD_MAX)
       return NULL;
@@ -398,7 +398,7 @@ void *mmap(void *addr, size_t length, int writable,
    if (mmap_file == NULL)
       return NULL;
    off_t file_ln = file_length(mmap_file);
-   if (file_ln <= 0 || file_ln > (1 << 23))
+   if (file_ln <= 0 || file_ln > (1 << 22))
       return NULL;
    return do_mmap(addr, file_ln, writable, mmap_file, offset);
 }

@@ -7,6 +7,7 @@
 #include "threads/vaddr.h"
 #include <stdlib.h>
 #include "userprog/process.h"
+#include "include/threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -67,10 +68,12 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		switch (VM_TYPE(type))
 		{
 		case VM_ANON:
-			uninit_new(new_page, upage, init, type, aux, anon_initializer);
+			uninit_new(new_page, pg_round_down(upage), init, type, aux, anon_initializer);
 			break;
 		case VM_FILE:
-			uninit_new(new_page, upage, init, type, aux, file_backed_initializer);
+			uninit_new(new_page, pg_round_down(upage), init, type, aux, file_backed_initializer);
+			break;
+		default:
 			break;
 		}
 		new_page->writable = writable;
@@ -107,17 +110,26 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
+	hash_delete(&spt->vm, &page->h_elem);
 	vm_dealloc_page(page);
 	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
-static struct frame *
-vm_get_victim(void)
+static struct frame *vm_get_victim(void)
 {
-	struct frame *victim = NULL;
 	/* TODO: The policy for eviction is up to you. */
-
+	struct list_elem *victim_elem;
+	struct frame *victim;
+	while (true)
+	{
+		victim_elem = list_pop_front(&frame_table);
+		victim = list_entry(victim_elem, struct frame, frame_elem);
+		if (!pml4_is_accessed(thread_current()->pml4, victim->page->va))
+			break;
+		pml4_set_accessed(thread_current()->pml4, victim->page->va, 0);
+		list_push_back(&frame_table, victim_elem);
+	}
 	return victim;
 }
 
@@ -128,7 +140,8 @@ vm_evict_frame(void)
 {
 	struct frame *victim UNUSED = vm_get_victim();
 	/* TODO: swap out the victim and return the evicted frame. */
-	return NULL;
+	swap_out(victim->page);
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -141,9 +154,9 @@ vm_get_frame(void)
 	struct frame *frame = (struct frame *)malloc(sizeof(struct frame));
 	frame->kva = palloc_get_page(PAL_USER);
 	if (frame->kva == NULL)
-		PANIC("todo");
+		frame = vm_evict_frame();
 	frame->page = NULL;
-
+	list_push_back(&frame_table, &frame->frame_elem);
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
 	return frame;
@@ -154,7 +167,7 @@ static void
 vm_stack_growth(void *addr UNUSED)
 {
 	struct thread *cur = thread_current();
-	if (vm_alloc_page(VM_ANON, pg_round_down(addr), true))
+	if (vm_alloc_page(VM_ANON, addr, true))
 	{
 		thread_current()->stack_bottom -= PGSIZE;
 		return true;
@@ -180,7 +193,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 		return false;
 	if (not_present)
 	{
-		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr < thread_current()->stack_bottom)
+		if (addr >= USER_STACK - (1 << 23) && USER_STACK > addr && addr < thread_current()->stack_bottom)
 		{
 			addr = thread_current()->stack_bottom - PGSIZE;
 			vm_stack_growth(addr);
@@ -271,6 +284,8 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	if (!hash_empty(&thread_current()->spt))
+		iter_munmap();
 	hash_destroy(&spt->vm, hash_destroy_func);
 }
 

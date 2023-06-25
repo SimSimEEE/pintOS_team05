@@ -217,10 +217,7 @@ tid_t thread_create(const char *name, int priority,
 
    list_push_back(&thread_current()->child_list, &t->child_elem);
    /* compare the priorities of the currently running thread and the newly inserted one. Yield the CPU if the newly arriving thread has higher priority*/
-   if (thread_get_priority() < t->priority)
-   {
-      thread_yield();
-   }
+   test_max_priority();
 
    return tid;
 }
@@ -388,7 +385,6 @@ void wakeup(int64_t g_ticks)
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-// 우근이형이 이거 문제라고 뉘앙스를 풍김
 void thread_set_priority(int new_priority)
 {
    thread_current()->pre_priority = new_priority;
@@ -401,12 +397,12 @@ void thread_set_priority(int new_priority)
 
 void test_max_priority(void)
 {
-   //    ready_list에서 우선 순위가 가장 높은 쓰레드와 현재 쓰레드의 우선 순위를
-   // 비교.
-   //  현재 쓰레드의 우선수위가 더 작다면 thread_yield()
+   // ready_list에서 우선 순위가 가장 높은 쓰레드와 현재 쓰레드의 우선 순위를 비교.
+   // 현재 쓰레드의 우선수위가 더 작다면 thread_yield()
    if (list_entry(ready_list.head.next, struct thread, elem)->priority > thread_get_priority())
    {
-      thread_yield();
+      if (!intr_context())
+         thread_yield();
    }
 }
 
